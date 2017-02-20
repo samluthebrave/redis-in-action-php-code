@@ -162,7 +162,7 @@ class Ch02Test extends AbstractTestCase
 
         $t->setGlobal('QUIT', true);
         sleep(2);
-        if (true) {
+        if ($t->isRunning()) {
             throw new Exception("The database caching thread is still alive?!?");
         }
     }
