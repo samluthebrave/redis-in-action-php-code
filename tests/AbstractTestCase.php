@@ -26,7 +26,7 @@ class AbstractTestCase extends PHPUnit\Framework\TestCase
      *
      * @param mixed $message
      */
-    protected static function display($message = PHP_EOL)
+    protected static function pprint($message = PHP_EOL)
     {
         fwrite(STDERR, trim(print_r($message, true), PHP_EOL) . PHP_EOL);
     }
