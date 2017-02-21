@@ -1,9 +1,12 @@
 <?php
 
-use RedisInAction\Threading;
+namespace RedisInAction\Ch02;
+
+use RedisInAction\Test\TestCase;
+use RedisInAction\Helper\Threading;
 use Ramsey\Uuid\Uuid;
 
-class Ch02Test extends AbstractTestCase
+class Ch02Test extends TestCase
 {
     protected function tearDown()
     {
@@ -44,7 +47,7 @@ class Ch02Test extends AbstractTestCase
         self::pprint("Let's drop the maximum number of cookies to 0 to clean them out");
         self::pprint("We will start a thread to do the cleaning, while we stop it later");
 
-        $t = new Threading('clean_sessions', [$conn], ['QUIT' => $QUIT, 'LIMIT' => $LIMIT]);
+        $t = new Threading('RedisInAction\Ch02\clean_sessions', [$conn], ['QUIT' => $QUIT, 'LIMIT' => $LIMIT]);
         $t->setGlobal('LIMIT', 0);
         $t->start();
         sleep(1);
@@ -76,7 +79,7 @@ class Ch02Test extends AbstractTestCase
         $this->assertTrue(count($r) >= 1);
 
         self::pprint("Let's clean out our sessions and carts");
-        $t = new Threading('clean_full_sessions', [$conn], ['QUIT' => $QUIT, 'LIMIT' => $LIMIT]);
+        $t = new Threading('RedisInAction\Ch02\clean_full_sessions', [$conn], ['QUIT' => $QUIT, 'LIMIT' => $LIMIT]);
         $t->setGlobal('LIMIT', 0);
         $t->start();
         sleep(1);
@@ -134,7 +137,7 @@ class Ch02Test extends AbstractTestCase
         $this->assertNotEmpty($s);
 
         self::pprint("We'll start a caching thread that will cache the data...");
-        $t = new Threading('cache_rows', [$conn], ['QUIT' => $QUIT]);
+        $t = new Threading('RedisInAction\Ch02\cache_rows', [$conn], ['QUIT' => $QUIT]);
         $t->start();
 
         sleep(1);

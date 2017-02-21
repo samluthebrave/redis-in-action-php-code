@@ -1,6 +1,10 @@
 <?php
 
-class Ch01Test extends AbstractTestCase
+namespace RedisInAction\Ch01;
+
+use RedisInAction\Test\TestCase;
+
+class Ch01Test extends TestCase
 {
     public function test_article_functionality()
     {

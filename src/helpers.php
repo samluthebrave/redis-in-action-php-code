@@ -1,6 +1,6 @@
 <?php
 
-namespace RedisInAction;
+namespace RedisInAction\Helper;
 
 class Threading extends \Thread
 {

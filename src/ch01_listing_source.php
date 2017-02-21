@@ -1,5 +1,7 @@
 <?php
 
+namespace RedisInAction\Ch01;
+
 const ONE_WEEK_IN_SECONDS = 7 * 86400;
 const VOTE_SCORE = 432;
 

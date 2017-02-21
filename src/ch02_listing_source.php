@@ -1,5 +1,9 @@
 <?php
 
+namespace RedisInAction\Ch02;
+
+use RedisInAction\Helper\Threading;
+
 function check_token($conn, $token)
 {
     return $conn->hget('login:', $token);
@@ -20,7 +24,7 @@ function update_token($conn, $token, $user, $item = null)
 $QUIT = false;
 $LIMIT = 10000000;
 
-function clean_sessions($conn, RedisInAction\Threading $thread)
+function clean_sessions($conn, Threading $thread)
 {
     while (!$thread->getGlobal('QUIT')) {
         $size = $conn->zcard('recent:');
@@ -52,7 +56,7 @@ function add_to_cart($conn, $session, $item, $count)
     }
 }
 
-function clean_full_sessions($conn, RedisInAction\Threading $thread)
+function clean_full_sessions($conn, Threading $thread)
 {
     while (!$thread->getGlobal('QUIT')) {
         $size = $conn->zcard('recent:');
@@ -99,7 +103,7 @@ function schedule_row_cache($conn, $row_id, $delay)
     $conn->zadd('schedule:', [$row_id => microtime(true)]);
 }
 
-function cache_rows($conn, RedisInAction\Threading $thread)
+function cache_rows($conn, Threading $thread)
 {
     while (!$thread->getGlobal('QUIT')) {
         $next = $conn->zrange('schedule:', 0, 0, ['WITHSCORES' => true]);
@@ -128,7 +132,7 @@ function cache_rows($conn, RedisInAction\Threading $thread)
 // see above
 // function update_token() { ... }
 
-function rescale_viewed($conn, RedisInAction\Threading $thread)
+function rescale_viewed($conn, Threading $thread)
 {
     while (!$thread->getGlobal('QUIT')) {
         $conn->zremrangebyrank('viewed', 0, -20001);
