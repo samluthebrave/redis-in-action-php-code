@@ -21,6 +21,7 @@ function update_token($conn, $token, $user, $item = null)
     }
 }
 
+global $QUIT, $LIMIT;
 $QUIT = false;
 $LIMIT = 10000000;
 
