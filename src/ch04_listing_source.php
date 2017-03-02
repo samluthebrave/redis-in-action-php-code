@@ -7,9 +7,9 @@ use Ramsey\Uuid\Uuid;
 
 function process_logs($conn, $path, $callback)
 {
-    list($current_file, $offset) = $conn->mget(
+    list($current_file, $offset) = $conn->mget([
         'progress:file', 'progress:position'
-    );
+    ]);
 
     $pipe = $conn->pipeline(['atomic' => true]);
 
