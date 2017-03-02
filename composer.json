@@ -13,6 +13,7 @@
             "src/ch01_listing_source.php",
             "src/ch02_listing_source.php",
             "src/ch03_listing_source.php",
+            "src/ch04_listing_source.php",
             "src/helpers.php"
         ]
     },
