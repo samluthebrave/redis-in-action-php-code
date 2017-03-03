@@ -4,9 +4,50 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#composer-lock-the-lock-file",
         "This file is @generated automatically"
     ],
-    "hash": "4c80249931cb1d958e1341991cc4e245",
-    "content-hash": "fa924eaff0a809d364bdfcb4102ecf67",
+    "hash": "ec6986b689591039d9a32b1bde843143",
+    "content-hash": "359cfac10f8029df6ffc81d1e0f01f07",
     "packages": [
+        {
+            "name": "mannion007/php-binary-search",
+            "version": "1.0.8",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/mannion007/php-binary-search.git",
+                "reference": "e20d2bd555f8b7f4e5b91412ece4e53f4b83ff76"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://packagist.phpcomposer.com/files/mannion007/php-binary-search/e20d2bd555f8b7f4e5b91412ece4e53f4b83ff76.zip",
+                "reference": "e20d2bd555f8b7f4e5b91412ece4e53f4b83ff76",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=5.3.0"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-0": {
+                    "Mannion007\\PhpBinarySearch": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Michael King",
+                    "email": "michael@mkwd.net"
+                },
+                {
+                    "name": "James Mannion",
+                    "email": "mannion007@gmail.com"
+                }
+            ],
+            "description": "Based on the Work of Michael King, this package provides functionality to perform a binary search of an ordered array, providing greatly improved performance over PHP's own array_search method.",
+            "homepage": "https://github.com/mannion007",
+            "time": "2016-06-06 16:41:52"
+        },
         {
             "name": "paragonie/random_compat",
             "version": "v2.0.4",
@@ -104,6 +145,53 @@
                 "redis"
             ],
             "time": "2016-06-16 16:22:20"
+        },
+        {
+            "name": "psr/log",
+            "version": "1.0.2",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/php-fig/log.git",
+                "reference": "4ebe3a8bf773a19edfe0a84b6585ba3d401b724d"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://packagist.phpcomposer.com/files/php-fig/log/4ebe3a8bf773a19edfe0a84b6585ba3d401b724d.zip",
+                "reference": "4ebe3a8bf773a19edfe0a84b6585ba3d401b724d",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=5.3.0"
+            },
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-master": "1.0.x-dev"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Psr\\Log\\": "Psr/Log/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "PHP-FIG",
+                    "homepage": "http://www.php-fig.org/"
+                }
+            ],
+            "description": "Common interface for logging libraries",
+            "homepage": "https://github.com/php-fig/log",
+            "keywords": [
+                "log",
+                "psr",
+                "psr-3"
+            ],
+            "time": "2016-10-10 12:19:37"
         },
         {
             "name": "ramsey/uuid",

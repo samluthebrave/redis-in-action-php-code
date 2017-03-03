@@ -3,7 +3,9 @@
         "php": ">=5.6.0",
         "predis/predis": "^1.1",
         "ramsey/uuid": "^3.5",
-        "ext-pthreads": "^2.0"
+        "ext-pthreads": "^2.0",
+        "psr/log": "^1.0",
+        "mannion007/php-binary-search": "^1.0"
     },
     "require-dev": {
         "phpunit/phpunit": "^5.7"
@@ -14,6 +16,7 @@
             "src/ch02_listing_source.php",
             "src/ch03_listing_source.php",
             "src/ch04_listing_source.php",
+            "src/ch05_listing_source.php",
             "src/helpers.php"
         ]
     },

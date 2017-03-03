@@ -11,15 +11,25 @@ class TestCase extends PHPUnitTestCase
 
     protected function setUp()
     {
-        $host = isset($GLOBALS['REDIS_HOST']) ? $GLOBALS['REDIS_HOST'] : '127.0.0.1';
-        $port = isset($GLOBALS['REDIS_PORT']) ? $GLOBALS['REDIS_PORT'] : '6379';
-
-        $this->conn = new RedisClient(['host' => $host, 'port' => $port]);
+        $this->conn = new RedisClient([
+            'host' => $this->getRedisServerHost(),
+            'port' => $this->getRedisServerPort(),
+        ]);
     }
 
     protected function tearDown()
     {
         unset($this->conn);
+    }
+
+    protected function getRedisServerHost()
+    {
+        return isset($GLOBALS['REDIS_HOST']) ? $GLOBALS['REDIS_HOST'] : '127.0.0.1';
+    }
+
+    protected function getRedisServerPort()
+    {
+        return isset($GLOBALS['REDIS_PORT']) ? $GLOBALS['REDIS_PORT'] : '6379';
     }
 
     /**
