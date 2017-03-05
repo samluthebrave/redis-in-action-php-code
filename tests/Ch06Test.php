@@ -93,4 +93,36 @@ class Ch06Test extends TestCase
 
         $this->conn->del('members:test');
     }
+
+    public function test_distributed_locking()
+    {
+        $this->conn->del('lock:testlock');
+
+        self::pprint("Getting an initial lock...");
+        $this->assertNotFalse(acquire_lock_with_timeout($this->conn, 'testlock', 1, 1));
+        self::pprint("Got it!");
+
+        self::pprint("Trying to get it again without releasing the first one...");
+        $this->assertFalse(acquire_lock_with_timeout($this->conn, 'testlock', .01, 1));
+        self::pprint("Failed to get it!");
+        self::pprint();
+
+        self::pprint("Waiting for the lock to timeout...");
+        sleep(2);
+        self::pprint("Getting the lock again...");
+        $r = acquire_lock_with_timeout($this->conn, 'testlock', 1, 1);
+        $this->assertNotFalse($r);
+        self::pprint("Got it!");
+
+        self::pprint("Releasing the lock...");
+        $this->assertTrue(release_lock($this->conn, 'testlock', $r));
+        self::pprint("Released it...");
+        self::pprint();
+
+        self::pprint("Acquiring it again...");
+        $this->assertNotFalse(acquire_lock_with_timeout($this->conn, 'testlock', 1, 1));
+        self::pprint("Got it!");
+
+        $this->conn->del('lock:testlock');
+    }
 }

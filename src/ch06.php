@@ -3,6 +3,7 @@
 namespace RedisInAction\Ch06;
 
 use Ramsey\Uuid\Uuid;
+use Predis\PredisException;
 use Predis\Transaction\AbortedMultiExecException;
 
 function add_update_contact($conn, $user, $contact)
@@ -98,4 +99,110 @@ function join_guild($conn, $guild, $user)
 function leave_guild($conn, $guild, $user)
 {
     $conn->zrem('members:' . $guild, $user);
+}
+
+function acquire_lock($conn, $lockname, $acquire_timeout = 10)
+{
+    $identifier = Uuid::uuid4()->toString();
+
+    $end = microtime(true) + $acquire_timeout;
+    while (microtime(true) < $end) {
+        if ($conn->setnx('lock:' . $lockname, $identifier)) {
+            return $identifier;
+        }
+
+        usleep(1);
+    }
+
+    return false;
+}
+
+function purchase_item_with_lock($conn, $buyerid, $itemid, $sellerid)
+{
+    $buyer = sprintf('users:%s', $buyerid);
+    $seller = sprintf('users:%s', $sellerid);
+    $item = sprintf('%s.%s', $itemid, $sellerid);
+    $inventory = sprintf('inventory:%s', $buyerid);
+
+    $locked = acquire_lock($conn, 'market:');
+    if (!$locked) {
+        return false;
+    }
+
+    $pipe = $conn->pipeline(['atomic' => true]);
+    try {
+        $pipe->zscore('market:', $item);
+        $pipe->hget($buyer, 'funds');
+        list($price, $funds) = $pipe->execute();
+        if (is_null($price) OR $price > $funds) {
+            return null;
+        }
+
+        $pipe->hincrby($seller, 'funds', intval($price));
+        $pipe->hincrby($buyer, 'funds', intval(-$price));
+        $pipe->sadd($inventory, $itemid);
+        $pipe->zrem('market:', $item);
+        $pipe->execute();
+
+        return true;
+
+    } catch (PredisException $e) {
+        // do nothing
+    } finally {
+        release_lock($conn, 'market:', $locked);
+    }
+}
+
+function release_lock($conn, $lockname, $identifier)
+{
+    $trans    = $conn->transaction(['cas' => true]);
+    $lockname = 'lock:' . $lockname;
+
+    while (true) {
+        try {
+            $trans->watch($lockname);
+
+            if ($trans->get($lockname) == $identifier) {
+                $trans->multi();
+                $trans->del($lockname);
+                $trans->execute();
+
+                return true;
+            }
+
+            $trans->unwatch();
+
+            break;
+
+        } catch (AbortedMultiExecException $e) {
+            // pass
+        }
+    }
+
+    return false;
+}
+
+function acquire_lock_with_timeout(
+    $conn, $lockname, $acquire_timeout = 10, $lock_timeout = 10
+)
+{
+    $identifier   = Uuid::uuid4()->toString();
+    $lockname     = 'lock:' . $lockname;
+    $lock_timeout = intval(ceil($lock_timeout));
+
+    $end = microtime(true) + $acquire_timeout;
+    while (microtime(true) < $end) {
+        if ($conn->setnx($lockname, $identifier)) {
+            $conn->expire($lockname, $lock_timeout);
+
+            return $identifier;
+
+        } elseif ($conn->ttl($lockname) < 0) {
+            $conn->expire($lockname, $lock_timeout);
+        }
+
+        usleep(1);
+    }
+
+    return false;
 }
