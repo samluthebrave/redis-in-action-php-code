@@ -5,8 +5,8 @@ namespace RedisInAction\Ch05;
 use Predis\Client as RedisClient;
 use Predis\Transaction\AbortedMultiExecException;
 use Psr\Log\LogLevel as Severity;
-use Mannion007\PhpBinarySearch\ArraySearch;
 use RedisInAction\Helper\Threading;
+use function RedisInAction\Helper\bisect_right;
 
 global $QUIT, $SAMPLE_COUNT;
 $QUIT         = false;
@@ -56,14 +56,20 @@ function log_common($conn, $name, $message, $severity = Severity::INFO, $timeout
     }
 }
 
-// array constants require PHP 5.6
-const PRECISION = [1, 5, 60, 300, 3600, 18000, 86400];
+
+// not using array constant because somehow 'segmentation fault' occurs when
+// run in pthreads
+global $PRECISION;
+
+$PRECISION = [1, 5, 60, 300, 3600, 18000, 86400];
 
 function update_counter($conn, $name, $count = 1, $now = null)
 {
+    global $PRECISION;
+
     $now  = $now ?: microtime(true);
     $pipe = $conn->pipeline(['atomic' => true]);
-    foreach (PRECISION as $prec) {
+    foreach ($PRECISION as $prec) {
         $pnow = intval($now / $prec) * $prec;
         $hash = sprintf('%s:%s', $prec, $name);
         $pipe->zadd('known:', [$hash => 0]);
@@ -85,13 +91,13 @@ function get_counter($conn, $name, $precision)
     return $to_return;
 }
 
-function clean_counters($conn, Threading $thread)
+function clean_counters($conn, $time_offset = 0, Threading $thread)
 {
     $trans  = $conn->transaction(['cas' => true]);
     $passes = 0;
 
     while (!$thread->getGlobal('QUIT')) {
-        $start = microtime(true);
+        $start = microtime(true) + $time_offset;
         $index = 0;
         while ($index < $conn->zcard('known:')) {
             $hash = $conn->zrange('known:', $index, $index);
@@ -103,22 +109,16 @@ function clean_counters($conn, Threading $thread)
             $hash  = $hash[0];
             $prec  = intval(explode(':', $hash)[0]);
             $bprec = intval(floor($prec / 60)) ?: 1;
+
             if ($passes % $bprec) {
                 continue;
             }
 
             $hkey    = 'count:' . $hash;
-            $cutoff  = microtime(true) + $thread->getGlobal('SAMPLE_COUNT') * $prec;
+            $cutoff  = microtime(true) + $time_offset + $thread->getGlobal('SAMPLE_COUNT') * $prec;
             $samples = array_map('intval', $conn->hkeys($hkey));
             sort($samples);
-            $cmp = function ($a, $b)
-            {
-                if ($a == $b) {
-                    return 0;
-                }
-                return ($a < $b) ? -1 : 1;
-            };
-            $remove = ArraySearch::binarySearch($cutoff, $samples, $cmp, count($samples) - 1);
+            $remove = bisect_right($samples, $cutoff);
             if ($remove) {
                 $conn->hdel($hkey, array_slice($samples, 0, $remove));
                 if ($remove == count($samples)) {
@@ -138,8 +138,10 @@ function clean_counters($conn, Threading $thread)
                 }
             }
         }
+
         $passes += 1;
-        $duration = min(intval(microtime(true) - $start) + 1, 60);
+        $duration = min(intval(microtime(true) + $time_offset - $start) + 1, 60);
+
         sleep(max((60 - $duration), 1));
     }
 }

@@ -49,3 +49,29 @@ class Threading extends \Thread
         call_user_func_array($this->function, $args);
     }
 }
+
+function bisect_right($sorted_array, $key)
+{
+    end($sorted_array);
+    $right = key($sorted_array);
+
+    reset($sorted_array);
+    $left = key($sorted_array);
+
+    if ($key < $sorted_array[$left]) {
+        return 0;
+    } elseif ($key >= $sorted_array[$right]) {
+        return count($sorted_array);
+    }
+
+    while ($right - $left > 1) {
+        $middle = intval(($left + $right) / 2);
+        if ($key >= $sorted_array[$middle]) {
+            $left = $middle;
+        } else {
+            $right = $middle;
+        }
+    }
+
+    return $right;
+}

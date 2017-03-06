@@ -20,7 +20,7 @@ class Ch05Test extends TestCase
 
     protected function tearDown()
     {
-        $this->conn->flushDb();
+//        $this->conn->flushDb();
         unset($this->conn);
         global $CONFIG_CONNECTION, $QUIT, $SAMPLE_COUNT;
         $CONFIG_CONNECTION = null;
@@ -82,21 +82,22 @@ class Ch05Test extends TestCase
         $this->assertTrue(count($counter) >= 2);
         self::pprint();
 
-        // todo: will emit 'segmentation fault'
-//        self::pprint("Let's clean out some counters by setting our sample count to 0");
-//        $SAMPLE_COUNT = 0;
-//        $t = new Threading(
-//            __NAMESPACE__ . '\clean_counters',
-//            [$conn],
-//            ['QUIT' => $QUIT, 'SAMPLE_COUNT' => $SAMPLE_COUNT]
-//        );
-//        $t->start();
-//        sleep(1);
-//        $t->setGlobal('QUIT', $QUIT = true);
-//
-//        $counter = get_counter($conn, 'test', 86400);
-//        self::pprint("Did we clean out all of the counters? " . json_encode(!$counter));
-//        $this->assertEmpty($counter);
+        self::pprint("Let's clean out some counters by setting our sample count to 0");
+        $SAMPLE_COUNT = 0;
+        $t = new Threading(
+            __NAMESPACE__ . '\clean_counters',
+            [$conn, 2 * 86400],
+            ['QUIT' => $QUIT, 'SAMPLE_COUNT' => $SAMPLE_COUNT]
+        );
+        $t->start();
+        sleep(1);
+        $t->setGlobal('QUIT', $QUIT = true);
+
+        $t->join();
+
+        $counter = get_counter($conn, 'test', 86400);
+        self::pprint("Did we clean out all of the counters? " . json_encode(!$counter));
+        $this->assertEmpty($counter);
     }
 
     public function test_ip_lookup()
