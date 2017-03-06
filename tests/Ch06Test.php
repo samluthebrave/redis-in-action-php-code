@@ -125,4 +125,40 @@ class Ch06Test extends TestCase
 
         $this->conn->del('lock:testlock');
     }
+
+    public function test_counting_semaphore()
+    {
+        $this->conn->del(['testsem', 'testsem:owner', 'testsem:counter']);
+
+        self::pprint("Getting 3 initial semaphores with a limit of 3...");
+        for ($i = 0; $i < 3; $i++) {
+            $this->assertNotNull(acquire_fair_semaphore($this->conn, 'testsem', 3, 1));
+        }
+        self::pprint("Done!");
+
+        self::pprint("Getting one more that should fail...");
+        $this->assertNull(acquire_fair_semaphore($this->conn, 'testsem', 3, 1));
+        self::pprint("Couldn't get it!");
+        self::pprint();
+
+        self::pprint("Lets's wait for some of them to time out");
+        sleep(2);
+        self::pprint("Can we get one?");
+        $r = acquire_fair_semaphore($this->conn, 'testsem', 3, 1);
+        $this->assertNotNull($r);
+        self::pprint("Got one!");
+
+        self::pprint("Let's release it...");
+        $this->assertNotEquals(0, release_fair_semaphore($this->conn, 'testsem', $r));
+        self::pprint("Released!");
+        self::pprint();
+
+        self::pprint("And let's make sure we can get 3 more!");
+        for ($i = 0; $i < 3; $i++) {
+            $this->assertNotNull(acquire_fair_semaphore($this->conn, 'testsem', 3, 1));
+        }
+        self::pprint("We got them!");
+
+        $this->conn->del(['testsem', 'testsem:owner', 'testsem:counter']);
+    }
 }

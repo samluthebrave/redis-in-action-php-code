@@ -206,3 +206,93 @@ function acquire_lock_with_timeout(
 
     return false;
 }
+
+function acquire_semaphore($conn, $semname, $limit, $timeout = 0)
+{
+    $identifier = Uuid::uuid4()->toString();
+    $now        = microtime(true);
+
+    $pipeline = $conn->pipeline(['atomic' => true]);
+    $pipeline->zremrangebyscore($semname, '-inf', $now - $timeout);
+    $pipeline->zadd($semname, [$identifier, $now]);
+    $pipeline->zrank($semname, $identifier);
+    $result = $pipeline->execute();
+    if (end($result) < $limit) {
+        return $identifier;
+    }
+
+    $conn->zrem($semname, $identifier);
+
+    return null;
+}
+
+function release_semaphore($conn, $semname, $identifier)
+{
+    return $conn->zrem($semname, $identifier);
+}
+
+function acquire_fair_semaphore($conn, $semname, $limit, $timeout = 10)
+{
+    $indentifier = Uuid::uuid4()->toString();
+    $czset       = $semname . ':owner';
+    $ctr         = $semname . ':counter';
+
+    $now = microtime(true);
+
+    $pipeline = $conn->pipeline(['atomic' => true]);
+    $pipeline->zremrangebyscore($semname, '-inf', $now - $timeout);
+    $pipeline->zinterstore($czset, [$czset, $semname], ['WEIGHTS' => [1, 0]]);
+
+    $pipeline->incr($ctr);
+    $result  = $pipeline->execute();
+    $counter = end($result);
+
+    $pipeline->zadd($semname, [$indentifier => $now]);
+    $pipeline->zadd($czset, [$indentifier => $counter]);
+
+    $pipeline->zrank($czset, $indentifier);
+    $result = $pipeline->execute();
+    if (end($result) < $limit) {
+        return $indentifier;
+    }
+
+    $pipeline->zrem($semname, $indentifier);
+    $pipeline->zrem($czset, $indentifier);
+    $pipeline->execute();
+
+    return null;
+}
+
+function release_fair_semaphore($conn, $semname, $identifier)
+{
+    $pipeline = $conn->pipeline(['atomic' => true]);
+    $pipeline->zrem($semname, $identifier);
+    $pipeline->zrem($semname . ':owner', $identifier);
+
+    return $pipeline->execute()[0];
+}
+
+function refresh_fair_semaphore($conn, $semname, $identifier)
+{
+    if ($conn->zadd($semname, [$identifier, microtime(true)])) {
+        release_fair_semaphore($conn, $semname, $identifier);
+
+        return false;
+    }
+
+    return true;
+}
+
+function acquire_semaphore_with_lock($conn, $semname, $limit, $timeout = 10)
+{
+    $identifier = acquire_lock($conn, $semname, $acquire_timeout = .01);
+    if ($identifier) {
+        try {
+            return acquire_fair_semaphore($conn, $semname, $limit, $timeout);
+        } catch (PredisException $e) {
+            // do nothing
+        } finally {
+            release_lock($conn, $semname, $identifier);
+        }
+    }
+}
