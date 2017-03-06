@@ -2,10 +2,9 @@ language: php
 sudo: false
 php:
   - 5.6
-  - 7.0
 services: redis-server
 before_script:
-  - pecl install pthreads
+  - sudo pecl install pthreads-2.0.10
   - composer self-update
   - composer install --no-interaction
 script:
