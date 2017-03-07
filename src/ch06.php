@@ -5,6 +5,7 @@ namespace RedisInAction\Ch06;
 use Ramsey\Uuid\Uuid;
 use Predis\PredisException;
 use Predis\Transaction\AbortedMultiExecException;
+use RedisInAction\Helper\Threading;
 
 function add_update_contact($conn, $user, $contact)
 {
@@ -103,7 +104,11 @@ function leave_guild($conn, $guild, $user)
 
 function acquire_lock($conn, $lockname, $acquire_timeout = 10)
 {
-    $identifier = Uuid::uuid4()->toString();
+    // when run in pthreads, uuid4 will trigger warning calling
+    // feads() in paragonie/random_compat/lib/random_bytes_dev_urandom.php
+    // PHP Warning: fread(): 122 is not a valid stream resource
+    // using uuid1 here
+    $identifier = Uuid::uuid1()->toString();
 
     $end = microtime(true) + $acquire_timeout;
     while (microtime(true) < $end) {
@@ -294,5 +299,128 @@ function acquire_semaphore_with_lock($conn, $semname, $limit, $timeout = 10)
         } finally {
             release_lock($conn, $semname, $identifier);
         }
+    }
+}
+
+function send_sold_email_via_queue($conn, $seller, $item, $price, $buyer)
+{
+    $data = [
+        'seller_id' => $seller,
+        'item_id'   => $item,
+        'price'     => $price,
+        'buyer_id'  => $buyer,
+        'time'      => microtime(true),
+    ];
+
+    $conn->rpush('queue:email', json_encode($data));
+}
+
+function process_sold_email_queue($conn, Threading $thread)
+{
+    while (!$thread->getGlobal('QUIT')) {
+        $packed = $conn->blpop(['queue:email'], 30);
+        if (!$packed) {
+            continue;
+        }
+
+        $to_send = json_decode($packed[1], true);
+        $result = fetch_data_and_send_sold_email($to_send);
+        if ($result === false) {
+            log_error("Failed to send sold email");
+        } else {
+            log_success("Sent sold email");
+        }
+    }
+}
+
+function worker_watch_queue($conn, $queue, $callbacks, Threading $thread)
+{
+    while (!$thread->getGlobal('QUIT')) {
+        $packed = $conn->blpop([$queue], 30);
+        if (!$packed) {
+            continue;
+        }
+
+        list($name, $args) = json_decode($packed[1], true);
+        if (!array_key_exists($name, $callbacks)) {
+            log_error(sprintf("Unknown callback %s", $name));
+            continue;
+        }
+
+        call_user_func_array($callbacks[$name], $args);
+    }
+}
+
+function worker_watch_queues($conn, $queues, $callbacks, Threading $thread)
+{
+    while (!$thread->getGlobal('QUIT')) {
+        $packed = $conn->blpop($queues, 30);
+        if (!$packed) {
+            continue;
+        }
+
+        list($name, $args) = json_decode($packed[1], true);
+        if (!array_key_exists($name, $callbacks)) {
+            log_error(sprintf("Unknown callback %s", $name));
+            continue;
+        }
+
+        call_user_func_array($callbacks[$name], $args);
+    }
+}
+
+function fetch_data_and_send_sold_email($to_send)
+{
+    // simply return true
+    return true;
+}
+
+function log_success($msg)
+{
+    // do nothing
+}
+
+function log_error($msg)
+{
+    // do nothing
+}
+
+function execute_later($conn, $queue, $name, $args, $delay = 0)
+{
+    $identifier = Uuid::uuid4()->toString();
+    $item = json_encode([$identifier, $queue, $name, $args]);
+    if ($delay > 0) {
+        $conn->zadd('delayed:', [$item => microtime(true) + $delay]);
+    } else {
+        $conn->rpush('queue:' . $queue, $item);
+    }
+
+    return $identifier;
+}
+
+function poll_queue($conn, Threading $thread)
+{
+    while (!$thread->getGlobal('QUIT')) {
+        $item = $conn->zrange('delayed:', 0, 0, ['WITHSCORES' => true]);
+        if (!$item OR reset($item) > microtime(true)) {
+            usleep(10);
+
+            continue;
+        }
+
+        $item = key($item);
+
+        list($identifier, $queue, $function, $args) = json_decode($item, true);
+
+        $locked = acquire_lock($conn, $identifier);
+        if (!$locked) {
+            continue;
+        }
+
+        if ($conn->zrem('delayed:', $item)) {
+            $conn->rpush('queue:' . $queue, $item);
+        }
+
+        release_lock($conn, $identifier, $locked);
     }
 }

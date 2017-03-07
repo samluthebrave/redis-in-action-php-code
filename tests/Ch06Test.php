@@ -2,6 +2,7 @@
 
 namespace RedisInAction\Ch06;
 
+use RedisInAction\Helper\Threading;
 use RedisInAction\Test\TestCase;
 
 class Ch06Test extends TestCase
@@ -160,5 +161,36 @@ class Ch06Test extends TestCase
         self::pprint("We got them!");
 
         $this->conn->del(['testsem', 'testsem:owner', 'testsem:counter']);
+    }
+
+    public function test_delayed_tasks()
+    {
+        $this->conn->del(['queue:tqueue', 'delayed:']);
+
+        self::pprint("Let's start some regular and delayed tasks...");
+        foreach ([0, .5, 0, 1.5] as $delay) {
+            $this->assertNotEmpty(
+                execute_later($this->conn, 'tqueue', 'testfn', [], $delay)
+            );
+        }
+        $r = $this->conn->llen('queue:tqueue');
+        self::pprint("How many non-delayed tasks are there (should be 2)? " . $r);
+        $this->assertEquals(2, $r);
+        self::pprint();
+        
+        self::pprint("Let's start up a thread to bring those delayed tasks back...");
+        $t = new Threading(__NAMESPACE__ . '\poll_queue', [$this->conn], ['QUIT' => false]);
+        $t->start();
+        self::pprint("Started.");
+        self::pprint("Let's wait for those tasks to be prepared...");
+        sleep(2);
+        $t->setGlobal('QUIT', true);
+        $t->join();
+
+        $r = $this->conn->llen('queue:tqueue');
+        self::pprint("Waiting is over, how many tasks do we have (should be 4)? " . $r);
+        $this->assertEquals(4, $r);
+
+        $this->conn->del(['queue:tqueue', 'delayed:']);
     }
 }
