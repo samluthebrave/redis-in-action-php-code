@@ -424,3 +424,115 @@ function poll_queue($conn, Threading $thread)
         release_lock($conn, $identifier, $locked);
     }
 }
+
+function create_chat($conn, $sender, $recipients, $message, $chat_id = null)
+{
+    $chat_id = $chat_id ?: strval($conn->incr('ids:chat:'));
+
+    $recipients[] = $sender;
+    $recipientsd  = array_fill_keys($recipients, 0);
+
+    $pipeline = $conn->pipeline(['atomic' => true]);
+    $pipeline->zadd('chat:' . $chat_id, $recipientsd);
+    foreach ($recipients as $rec) {
+        $pipeline->zadd('seen:' . $rec, [$chat_id => 0]);
+    }
+    $pipeline->execute();
+
+    return send_message($conn, $chat_id, $sender, $message);
+}
+
+function send_message($conn, $chat_id, $sender, $message)
+{
+    $identifiter = acquire_lock($conn, 'chat:' . $chat_id);
+    if (!$identifiter) {
+        throw new \Exception("Couldn't get the lock");
+    }
+
+    try {
+        $mid = $conn->incr('ids:' . $chat_id);
+        $ts  = microtime(true);
+        $packed = json_encode([
+            'id'      => $mid,
+            'ts'      => $ts,
+            'sender'  => $sender,
+            'message' => $message
+        ]);
+
+        $conn->zadd('msgs:' . $chat_id, [$packed => $mid]);
+
+    } finally {
+        release_lock($conn, 'chat:' . $chat_id, $identifiter);
+    }
+
+    return $chat_id;
+}
+
+function fetch_pending_messages($conn, $recipient)
+{
+    $seen = $conn->zrange('seen:' . $recipient, 0 , -1, ['WITHSCORES' => true]);
+
+    $pipeline = $conn->pipeline(['atomic' => true]);
+
+    foreach ($seen as $chat_id => $seen_id) {
+        $pipeline->zrangebyscore('msgs:' . $chat_id, $seen_id + 1, '+inf');
+    }
+    $results = $pipeline->execute();
+
+    $chat_info = [];
+
+    reset($seen);
+    reset($results);
+    while (list($chat_id, $seen_id) = each($seen)) {
+        $messages = each($results)['value'];
+        if (!$messages) {
+            continue;
+        }
+
+        $messages = array_map(
+            function ($message) { return json_decode($message, true); },
+            $messages
+        );
+
+        $seen_id = end($messages)['id'];
+        $conn->zadd('chat:' . $chat_id, [$recipient => $seen_id]);
+
+        $min_id = $conn->zrange('chat:' . $chat_id, 0, 0, ['WITHSCORES' => true]);
+
+        $pipeline->zadd('seen:' . $recipient, [$chat_id => $seen_id]);
+
+        if ($min_id) {
+            $pipeline->zremrangebyscore('msgs:' . $chat_id, 0, reset($min_id));
+        }
+
+        $chat_info[$chat_id] = $messages;
+    }
+
+    return $chat_info;
+}
+
+function join_chat($conn, $chat_id, $user)
+{
+    $message_id = intval($conn->get('ids:' . $chat_id));
+
+    $pipeline = $conn->pipeline(['atomic' => true]);
+    $pipeline->zadd('chat:' . $chat_id, [$user => $message_id]);
+    $pipeline->zadd('seen:' . $user, [$chat_id => $message_id]);
+    $pipeline->execute();
+}
+
+function leave_chat($conn, $chat_id, $user)
+{
+    $pipeline = $conn->pipeline(['atomic' => true]);
+    $pipeline->zrem('chat:' . $chat_id, $user);
+    $pipeline->zrem('seen:' . $user, $chat_id);
+    $pipeline->zcard('chat:' . $chat_id);
+    $results = $pipeline->execute();
+
+    if (!end($results)) {
+        $conn->del('msg:' . $chat_id, 'ids:' . $chat_id);
+    } else {
+        $oldest = $conn->zrange('chat:' . $chat_id, 0, 0, ['WITHSCORES' => true]);
+        $conn->zremrangebyscore('msgs:' . $chat_id, 0, reset($oldest));
+    }
+}

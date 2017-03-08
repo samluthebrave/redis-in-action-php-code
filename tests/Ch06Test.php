@@ -193,4 +193,28 @@ class Ch06Test extends TestCase
 
         $this->conn->del(['queue:tqueue', 'delayed:']);
     }
+
+    public function test_multi_recipient_messaging()
+    {
+        $this->conn->del('ids:chat:', 'msgs:1', 'ids:1', 'seen:joe', 'seen:jeff', 'seen:jenny');
+
+        self::pprint("Let's create a new chat session with some recipients...");
+        $chat_id = create_chat($this->conn, 'joe', ['jeff', 'jenny'], 'message 1');
+
+        self::pprint("Now let's send a few messages...");
+        for ($i = 2; $i < 5; $i++) {
+            send_message($this->conn, $chat_id, 'joe', sprintf('message %s', $i));
+        }
+        self::pprint();
+
+        self::pprint("And let's get the messages that are waiting for jeff and jenny...");
+        $r1 = fetch_pending_messages($this->conn, 'jeff');
+        $r2 = fetch_pending_messages($this->conn, 'jenny');
+        self::pprint("They are the same? " . json_encode($r1 == $r2));
+        $this->assertEquals($r1, $r2);
+        self::pprint("Those messages are:");
+        self::pprint($r1);
+
+        $this->conn->del('ids:chat:', 'msgs:1', 'ids:1', 'seen:joe', 'seen:jeff', 'seen:jenny');
+    }
 }
