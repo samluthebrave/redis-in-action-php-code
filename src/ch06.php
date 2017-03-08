@@ -532,3 +532,234 @@ function leave_chat($conn, $chat_id, $user)
         $conn->zremrangebyscore('msgs:' . $chat_id, 0, reset($oldest));
     }
 }
+
+global $AGGREGATES;
+
+$AGGREGATES = [];
+
+function daily_country_aggregates($conn, $line)
+{
+    global $AGGREGATES;
+
+    if ($line) {
+        $line    = explode(' ', $line);
+        $ip      = $line[0];
+        $day     = $line[1];
+        $country = find_city_by_ip_local($ip)[2];
+
+        $AGGREGATES[$day][$country] += 1;
+
+        return;
+    }
+
+    foreach ($AGGREGATES as $day => $aggregate) {
+        $conn->zadd('daily:country:' . $day, $aggregate);
+        unset($AGGREGATES[$day]);
+    }
+}
+
+function find_city_by_ip_local($ip)
+{
+    // simple mock
+    return [ 'city-' . $ip, 'region-' . $ip, 'country-' . $ip];
+}
+
+function copy_logs_to_redis(
+    $conn, $path, $channel, $count = 10, $limit = 2 ** 30, $quit_when_done = true
+)
+{
+    $bytes_in_redis = 0;
+    $waiting = [];
+
+    create_chat(
+        $conn, 'source', array_map('strval', range(0, $count - 1)), '', $channel
+    );
+    $count = strval($count);
+    foreach (array_diff(scandir($path, SCANDIR_SORT_ASCENDING), ['..', '.']) as $logfile) {
+        $full_path = rtrim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $logfile;
+
+        $fsize = filesize($full_path);
+        while ($bytes_in_redis + $fsize > $limit) {
+            $cleaned = _clean($conn, $channel, $waiting, $count);
+            if ($cleaned) {
+                $bytes_in_redis -= $cleaned;
+            } else {
+                usleep(250000);
+            }
+        }
+
+        $inp = fopen($full_path, 'rb');
+        $block = ' ';
+        while ($block) {
+            $block = fread($inp, 2 ** 17);
+            $conn->append($channel . $logfile, $block);
+        }
+        fclose($inp);
+
+        send_message($conn, $channel, 'source', $logfile);
+
+        $bytes_in_redis += $fsize;
+        $waiting[] = [$logfile, $fsize];
+    }
+
+    if ($quit_when_done) {
+        send_message($conn, $channel, 'source', ':done');
+    }
+
+    while ($waiting) {
+        $cleaned = _clean($conn, $channel, $waiting, $count);
+        if ($cleaned) {
+            $bytes_in_redis -= $cleaned;
+        } else {
+            usleep(250000);
+        }
+    }
+}
+
+function _clean($conn, $channel, &$waiting, $count)
+{
+    if (!$waiting) {
+        return 0;
+    }
+    
+    $w0 = $waiting[0][0];
+    if ($conn->get($channel . $w0 . ':done') == $count) {
+        $conn->del($channel . $w0, $channel . $w0 . ':done');
+        
+        return array_shift($waiting)[1];
+    }
+
+    return 0;
+}
+
+function process_logs_from_redis($conn, $id, $callback)
+{
+    while (1) {
+        $fdata = fetch_pending_messages($conn, $id);
+
+        foreach ($fdata as $ch => $mdata) {
+            foreach ($mdata as $message) {
+                $logfile = $message['message'];
+
+                if ($logfile == ':done') {
+                    return;
+                } elseif (!$logfile) {
+                    continue;
+                }
+
+                $block_reader = __NAMESPACE__ . '\readblocks';
+                if (substr($logfile, -strlen('.gz')) === '.gz') {
+                    $block_reader = __NAMESPACE__ . '\readblocks_gz';
+                }
+
+                foreach (readlines($conn, $ch . $logfile, $block_reader) as $line) {
+                    $callback($conn, $line);
+                }
+                $callback($conn, null);
+
+                $conn->incr($ch . $logfile . ':done');
+            }
+        }
+
+        if (!$fdata) {
+            usleep(100000);
+        }
+    }
+}
+
+function readlines($conn, $key, $rblocks)
+{
+    $out = '';
+    foreach ($rblocks($conn, $key) as $block) {
+        $out .= $block;
+        $posn = strrpos($out, "\n");
+        if ($posn > 0) {
+            foreach (explode("\n", substr($out, 0, $posn)) as $line) {
+                yield $line . "\n";
+            }
+            $out = substr($out, $posn + 1);
+        }
+
+        if (!$block) {
+            yield $out;
+
+            break;
+        }
+    }
+}
+
+function readblocks($conn, $key, $blocksize = 2 ** 17)
+{
+    $lb  = $blocksize;
+    $pos = 0;
+    while ($lb == $blocksize) {
+        $block = $conn->getrange($key, $pos, $pos + $blocksize - 1);
+        yield $block;
+
+        $lb = strlen($block);
+        $pos += $lb;
+    }
+    yield '';
+}
+
+function readblocks_gz($conn, $key)
+{
+    // todo
+//    $inp = '';
+//    $decoder = null;
+//    foreach (readblocks($conn, $key, 2 ** 17) as $block) {
+//        if (!$decoder) {
+//            $inp .= $block;
+//
+//            $exception_caught = false;
+//            try {
+//                if (substr($inp, 0, 3) != "\x1f\x8b\x08") {
+//                    throw new \Exception("invalid gzip data");
+//                }
+//
+//                $i = 10;
+//                $flag = ord($inp[3]);
+//                if ($flag & 4) {
+//                    $i += 2 + ord($inp[$i]) + 256 * ord($inp[$i + 1]);
+//                }
+//                if ($flag & 8) {
+//                    $i = strpos($inp, "\0", $i) + 1;
+//                }
+//                if ($flag & 16) {
+//                    $i = strpos($inp, "\0", $i) + 1;
+//                }
+//                if ($flag & 2) {
+//                    $i += 2;
+//                }
+//                if ($i > strlen($inp)) {
+//                    throw new \OutOfRangeException("not enough data");
+//                }
+//            } catch (\OutOfRangeException $e) {
+//                $exception_caught = true;
+//
+//                continue;
+//            } catch (\InvalidArgumentException $e) {
+//                $exception_caught = true;
+//
+//                continue;
+//            }
+//
+//            if (!$exception_caught) {
+//                $block = substr($inp, $i);
+//                $inp = null;
+//                $decoder = 'zlib_decode';
+//                if (!$block) {
+//                    continue;
+//                }
+//
+//            }
+//        }
+//
+//        if (!$block) {
+//
+//            break;
+//        }
+//
+//        yield $decoder($block);
+//    }
+}

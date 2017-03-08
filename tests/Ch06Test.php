@@ -14,7 +14,7 @@ class Ch06Test extends TestCase
 
     protected function tearDown()
     {
-        $this->conn->flushdb();
+//        $this->conn->flushdb();
 
         parent::tearDown();
     }
@@ -216,5 +216,77 @@ class Ch06Test extends TestCase
         self::pprint($r1);
 
         $this->conn->del('ids:chat:', 'msgs:1', 'ids:1', 'seen:joe', 'seen:jeff', 'seen:jenny');
+    }
+
+    public function test_file_distribution()
+    {
+        $this->conn->del(
+            'test:temp-1.txt', 'test:temp-2.txt', 'test:temp-3.txt', 'msgs:test:',
+            'seen:0', 'seen:source', 'ids:test:', 'chat:test:'
+        );
+
+        try {
+            $dire = sys_get_temp_dir() . '/' . uniqid();
+            mkdir($dire, 0775);
+
+            self::pprint("Creating some temporary 'log' files...");
+            $f = fopen($dire . '/temp-1.txt', 'wb');
+            fwrite($f, "one line\n");
+            fclose($f);
+
+            $f = fopen($dire . '/temp-2.txt', 'wb');
+            for ($i = 0; $i < 10000; $i++) {
+                fwrite($f, "many lines\n");
+            }
+            fclose($f);
+
+            self::pprint("Starting up a thread to copy logs to redis...");
+            $t = new Threading(
+                __NAMESPACE__ . '\copy_logs_to_redis',
+                [$this->conn, $dire, 'test:', 1]
+            );
+            $t->start();
+
+            self::pprint("Let's pause to let some logs get copied to Redis...");
+            usleep(250000);
+            self::pprint();
+            self::pprint("Okay, the logs should be ready. Let's process them!");
+
+            $index  = [0];
+            $counts = [0, 0];
+            $callback = function ($conn, $line) use (&$index, &$counts) {
+                if (is_null($line)) {
+                    TestCase::pprint(sprintf(
+                        "Finished with a file %s, linecount: %s",
+                        $index[0],
+                        $counts[$index[0]]
+                    ));
+                    $index[0] += 1;
+                } elseif ($line OR substr($line, -1) === "\n") {
+                    $counts[$index[0]] += 1;
+                }
+            };
+
+            self::pprint("Files should have 1, 10000, and 100000 lines");
+            process_logs_from_redis($this->conn, '0', $callback);
+            $this->assertEquals([1, 10000], $counts);
+
+            self::pprint();
+            self::pprint("Let's wait for the copy thread to finish cleaning up...");
+            $t->join();
+            self::pprint("Done cleaning out Redis!");
+        } finally {
+            self::pprint("Time to clean up files...");
+            foreach (array_diff(scandir($dire), ['..', '.']) as $file) {
+                unlink($dire . DIRECTORY_SEPARATOR . $file);
+            }
+            rmdir($dire);
+            self::pprint("Cleaned out files!");
+        }
+
+        $this->conn->del(
+            'test:temp-1.txt', 'test:temp-2.txt', 'test:temp-3.txt', 'msgs:test:',
+            'seen:0', 'seen:source', 'ids:test:', 'chat:test:'
+        );
     }
 }
