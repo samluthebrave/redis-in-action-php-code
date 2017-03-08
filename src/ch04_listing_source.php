@@ -27,7 +27,7 @@ function process_logs($conn, $path, $callback)
         }
 
         $inp = fopen(
-            trim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $fname,
+            rtrim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $fname,
             'rb'
         );
         if ($fname == $current_file) {
