@@ -151,8 +151,6 @@ function purchase_item_with_lock($conn, $buyerid, $itemid, $sellerid)
 
         return true;
 
-    } catch (PredisException $e) {
-        // do nothing
     } finally {
         release_lock($conn, 'market:', $locked);
     }
@@ -294,8 +292,6 @@ function acquire_semaphore_with_lock($conn, $semname, $limit, $timeout = 10)
     if ($identifier) {
         try {
             return acquire_fair_semaphore($conn, $semname, $limit, $timeout);
-        } catch (PredisException $e) {
-            // do nothing
         } finally {
             release_lock($conn, $semname, $identifier);
         }
