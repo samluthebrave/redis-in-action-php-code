@@ -111,7 +111,8 @@ function cache_rows($conn, Threading $thread)
 
         $now = microtime(true);
         if (!$next OR reset($next) > $now) {
-            usleep(50);
+            usleep(50000);
+
             continue;
         }
 

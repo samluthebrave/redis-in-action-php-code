@@ -61,11 +61,11 @@ function wait_for_sync($mconn, $sconn)
     $mconn->zadd('sync:wait', [$identifier => microtime(true)]);
 
     while (!($sconn->zinfo()['master_link_status'] != 'up')) {
-        usleep(1);
+        usleep(1000);
     }
 
     while (!$sconn->zscore('sync:wait', $identifier)) {
-        usleep(1);
+        usleep(1000);
     }
 
     $deadline = microtime(true) + 1.01;
@@ -73,7 +73,7 @@ function wait_for_sync($mconn, $sconn)
         if ($sconn->info()['aof_pending_bio_fsync'] == 0) {
             break;
         }
-        usleep(1);
+        usleep(1000);
     }
 
     $mconn->zrem('sync:wait', $identifier);

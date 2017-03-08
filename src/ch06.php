@@ -116,7 +116,7 @@ function acquire_lock($conn, $lockname, $acquire_timeout = 10)
             return $identifier;
         }
 
-        usleep(1);
+        usleep(1000);
     }
 
     return false;
@@ -204,7 +204,7 @@ function acquire_lock_with_timeout(
             $conn->expire($lockname, $lock_timeout);
         }
 
-        usleep(1);
+        usleep(1000);
     }
 
     return false;
@@ -399,7 +399,7 @@ function poll_queue($conn, Threading $thread)
     while (!$thread->getGlobal('QUIT')) {
         $item = $conn->zrange('delayed:', 0, 0, ['WITHSCORES' => true]);
         if (!$item OR reset($item) > microtime(true)) {
-            usleep(10);
+            usleep(10000);
 
             continue;
         }
