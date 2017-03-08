@@ -21,7 +21,7 @@ function process_logs($conn, $path, $callback)
         $pipe->execute();
     };
 
-    foreach (scandir($path, SCANDIR_SORT_ASCENDING) as $fname) {
+    foreach (array_diff(scandir($path, SCANDIR_SORT_ASCENDING), ['..', '.']) as $fname) {
         if ($fname < $current_file) {
             continue;
         }
