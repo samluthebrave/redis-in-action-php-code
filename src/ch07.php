@@ -174,3 +174,129 @@ function search_and_sort(
 
     return [$results[0], $results[1], $id];
 }
+
+function search_and_zsort(
+    $conn, $query, $id = null, $ttl = 300, $update = 1, $vote = 0, $start = 0, $num = 20, $desc = true
+)
+{
+    if ($id AND !$conn->expire($id, $ttl)) {
+        $id = null;
+    }
+    if (!$id) {
+        $id = parse_and_search($conn, $query, $ttl);
+        $scored_search = [
+            $id           => 0,
+            'sort:update' => $update,
+            'sort:votes'  => $vote
+        ];
+        $id = zintersect($conn, $scored_search, $ttl);
+    }
+    $pipeline = $conn->pipeline(['atomic' => true]);
+    $pipeline->zcard('idx:' . $id);
+    if ($desc) {
+        $pipeline->zrevrange('idx:' . $id, $start, $start + $num - 1);
+    } else {
+        $pipeline->zrange('idx:' . $id, $start, $start + $num - 1);
+    }
+    $results = $pipeline->execute();
+
+    return [$results[0], $results[1], $id];
+}
+
+function _zset_common($conn, $method, $scores, $ttl = 30, array $kw = array())
+{
+    $id = Uuid::uuid4()->toString();
+    $execute = isset($kw['_execute']) ? $kw['_execute'] : true;
+    unset($kw['_execute']);
+
+    $pipeline = $execute ? $conn->pipeline() : $conn;
+    foreach ($scores as $key => $score) {
+        $scores['idx:' . $key] = $score;
+        unset($scores[$key]);
+    }
+
+    $options = [];
+    $options['WEIGHTS'] = array_values($scores);
+    $options = array_merge($options, $kw);
+    call_user_func(array($pipeline, $method), 'idx:' . $id, array_keys($scores), $options);
+    $pipeline->expire('idx:' . $id, $ttl);
+    if ($execute) {
+        $pipeline->execute();
+    }
+
+    return $id;
+}
+
+function zunion($conn, $items, $ttl = 30, array $kw = array())
+{
+    return _zset_common($conn, 'zunionstore', $items, $ttl, $kw);
+}
+
+function zintersect($conn, $items, $ttl = 30, array $kw = array())
+{
+    return _zset_common($conn, 'zinterstore', $items, $ttl, $kw);
+}
+
+function string_to_score($string, $ignore_case = false)
+{
+    if ($ignore_case) {
+        $string = strtolower($string);
+    }
+    $pieces = array_map('ord', str_split(substr($string, 0, 6)));
+    while (count($pieces) < 6) {
+        array_push($pieces, -1);
+    }
+    $score = 0;
+    foreach ($pieces as $piece) {
+        $score = $score * 257 + $piece + 1;
+    }
+
+    return $score * 2 + (strlen($string) > 6);
+}
+
+function to_char_map($set)
+{
+    $out = [];
+
+    sort($set);
+    foreach ($set as $pos => $val) {
+        $out[$val] = $pos - 1;
+    }
+
+    return $out;
+}
+
+global $LOWER, $ALPHA, $LOWER_NUMERIC, $ALPHA_NUMERIC;
+
+$LOWER = to_char_map(array_merge(range(ord('a'), ord('z')), [-1]));
+$ALPHA = to_char_map(array_merge(range(ord('A'), ord('Z')), $LOWER));
+$LOWER_NUMERIC = to_char_map(array_merge(range(ord('0'), ord('9')), $LOWER));
+$ALPHA_NUMERIC = to_char_map(array_merge($ALPHA, $LOWER_NUMERIC));
+
+function string_to_score_generic($string, $mapping)
+{
+    $length = intval(52 / log(count($mapping), 2));
+
+    $pieces = array_map('ord', str_split(substr($string, 0, $length)));
+    while (count($pieces) < $length) {
+        array_push($pieces, -1);
+    }
+
+    $score = 0;
+    foreach ($pieces as $piece) {
+        $value = $mapping[$piece];
+        $score = $score * count($mapping) + $value + 1;
+    }
+
+    return $score * 2 + (strlen($string) > $length);
+}
+
+function zadd_string($conn, $name, $kwargs)
+{
+    $pieces = [];
+    foreach ($kwargs as $k => $v) {
+        $pieces[$k] = string_to_score($v);
+    }
+
+    return $conn->zadd($name, $pieces);
+}

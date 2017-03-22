@@ -121,4 +121,66 @@ class Ch06Test extends TestCase
 
         self::pprint("Which passed!");
     }
+
+    public function test_search_with_zsort()
+    {
+        self::pprint("And now let's test searching with sorting via zset...");
+
+        index_document($this->conn, 'test', self::CONTENT);
+        index_document($this->conn, 'test2', self::CONTENT);
+        $this->conn->zadd('idx:sort:update', ['test' => 12345, 'test2' => 54321]);
+        $this->conn->zadd('idx:sort:votes', ['test' => 10, 'test2' => 1]);
+
+        $r = search_and_zsort(
+            $this->conn, 'content', $id = null, $ttl = 300, $update = 1,
+            $vote = 0, $start = 0, $num = 20, $desc = false
+        );
+        $this->assertEquals(['test', 'test2'], $r[1]);
+
+        $r = search_and_zsort(
+            $this->conn, 'content', $id = null, $ttl = 300, $update = 0,
+            $vote = 1, $start = 0, $num = 20, $desc = false
+        );
+        $this->assertEquals(['test2', 'test'], $r[1]);
+
+        self::pprint("Which passed!");
+    }
+
+    public function test_string_to_score()
+    {
+        $words = explode(' ', 'these are some words that will be sorted');
+        $cmp = function ($a, $b) {
+            if ($a[1] == $b[1]) {
+                return 0;
+            }
+
+            return ($a[1] > $b[1]) ? 1 : -1;
+        };
+
+        $pairs = array_map(
+            function ($word) { return [$word, string_to_score($word)]; },
+            $words
+        );
+        $pairs2 = array_values($pairs);
+        sort($pairs);
+        usort($pairs2, $cmp);
+        $this->assertEquals($pairs, $pairs2);
+
+        $pairs = array_map(
+            function ($word) {
+                global $LOWER;
+
+                return [$word, string_to_score_generic($word, $LOWER)];
+            },
+            $words
+        );
+        $pairs2 = array_values($pairs);
+        sort($pairs);
+        usort($pairs2, $cmp);
+        $this->assertEquals($pairs, $pairs2);
+
+        zadd_string($this->conn, 'key', ['test' => 'value', 'test2' => 'other']);
+        $this->assertEquals(string_to_score('value'), $this->conn->zscore('key', 'test'));
+        $this->assertEquals(string_to_score('other'), $this->conn->zscore('key', 'test2'));
+    }
 }
