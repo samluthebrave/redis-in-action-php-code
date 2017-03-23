@@ -219,4 +219,90 @@ class Ch06Test extends TestCase
             $this->conn->zrange('ad:base_value:', 0, -1, ['WITHSCORES' => true])
         );
     }
+
+    public function test_is_qualified_for_job()
+    {
+        add_job($this->conn, 'test', ['q1', 'q2', 'q3']);
+        $this->assertTrue(is_qualified($this->conn, 'test', ['q1', 'q3', 'q2']));
+        $this->assertFalse(is_qualified($this->conn, 'test', ['q1', 'q2']));
+    }
+
+    public function test_index_and_find_jobs()
+    {
+        index_job($this->conn, 'test1', ['q1', 'q2', 'q3']);
+        index_job($this->conn, 'test2', ['q1', 'q3', 'q4']);
+        index_job($this->conn, 'test3', ['q1', 'q3', 'q5']);
+
+        $this->assertEquals([], find_jobs($this->conn, ['q1']));
+        $this->assertEquals(['test2'], find_jobs($this->conn, ['q1', 'q3', 'q4']));
+        $this->assertEquals(['test3'], find_jobs($this->conn, ['q1', 'q3', 'q5']));
+        $this->assertEquals(
+            ['test1', 'test2', 'test3'],
+            find_jobs($this->conn, ['q1', 'q2', 'q3', 'q4', 'q5'])
+        );
+    }
+
+    public function test_index_and_find_jobs_levels()
+    {
+        self::pprint("now testing find jobs with levels ...");
+        index_job_levels($this->conn, "job1", ['q1' => 1]);
+        index_job_levels($this->conn, "job2", ['q1' => 0, 'q2' => 2]);
+
+        $this->assertEquals([], search_job_levels($this->conn, ['q1' => 0]));
+        $this->assertEquals(
+            ['job1'], search_job_levels($this->conn, ['q1' => 1])
+        );
+        $this->assertEquals(
+            ['job1'], search_job_levels($this->conn, ['q1' => 2])
+        );
+        $this->assertEquals([], search_job_levels($this->conn, ['q2' => 1]));
+        $this->assertEquals([], search_job_levels($this->conn, ['q2' => 2]));
+        $this->assertEquals(
+            [], search_job_levels($this->conn, ['q1' => 0, 'q2' => 1])
+        );
+        $this->assertEquals(
+            ['job2'],
+            search_job_levels($this->conn, ['q1' => 0, 'q2' => 2])
+        );
+        $this->assertEquals(
+            ['job1'],
+            search_job_levels($this->conn, ['q1' => 1, 'q2' => 1])
+        );
+        $this->assertEquals(
+            ['job1', 'job2'],
+            search_job_levels($this->conn, ['q1' => 1, 'q2' => 2])
+        );
+
+        self::pprint("which passed");
+    }
+
+    public function test_index_and_find_jobs_years()
+    {
+        self::pprint("now testing find jobs with years ...");
+        index_job_years($this->conn, "job1",['q1' => 1]);
+        index_job_years($this->conn, "job2",['q1' => 0, 'q2' => 2]);
+
+        $this->assertEquals([], search_job_years($this->conn, ['q1' => 0]));
+        $this->assertEquals(['job1'], search_job_years($this->conn, ['q1' => 1]));
+        $this->assertEquals(['job1'], search_job_years($this->conn, ['q1' => 2]));
+        $this->assertEquals([], search_job_years($this->conn, ['q2' => 1]));
+        $this->assertEquals([], search_job_years($this->conn, ['q2' => 2]));
+        $this->assertEquals(
+            [], search_job_years($this->conn, ['q1' => 0, 'q2' => 1])
+        );
+        $this->assertEquals(
+            ['job2'],
+            search_job_years($this->conn, ['q1' => 0, 'q2' => 2])
+        );
+        $this->assertEquals(
+            ['job1'],
+            search_job_years($this->conn, ['q1' => 1, 'q2' => 1])
+        );
+        $this->assertEquals(
+            ['job1','job2'],
+            search_job_years($this->conn, ['q1' => 1, 'q2' => 2])
+        );
+
+        self::pprint("which passed");
+    }
 }

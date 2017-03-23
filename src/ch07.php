@@ -534,3 +534,127 @@ function update_cpms($conn, $ad_id)
     }
     $pipeline->execute();
 }
+
+function add_job($conn, $job_id, $required_skills)
+{
+    $conn->sadd('job:' . $job_id, $required_skills);
+}
+
+function is_qualified($conn, $job_id, $candidate_skills)
+{
+    $temp = Uuid::uuid4()->toString();
+    $pipeline = $conn->pipeline(['atomic' => true]);
+    $pipeline->sadd($temp, $candidate_skills);
+    $pipeline->expire($temp, 5);
+    $pipeline->sdiff('job:' . $job_id, $temp);
+    $results = $pipeline->execute();
+
+    return !end($results);
+}
+
+function index_job($conn, $job_id, $skills)
+{
+    $pipeline = $conn->pipeline(['atomic' => true]);
+    foreach ($skills as $skill) {
+        $pipeline->sadd('idx:skill:' . $skill, $job_id);
+    }
+    $pipeline->zadd('idx:jobs:req', [$job_id => count($skills)]);
+    $pipeline->execute();
+}
+
+function find_jobs($conn, $candidate_skills)
+{
+    $skills = [];
+    foreach ($candidate_skills as $skill) {
+        $skills['skill:' . $skill] = 1;
+    }
+    $job_scores   = zunion($conn, $skills);
+    $final_result = zintersect($conn, [$job_scores => -1, 'jobs:req' => 1]);
+
+    return $conn->zrangebyscore('idx:' . $final_result, 0, 0);
+}
+
+const SKILL_LEVEL_LIMIT = 2;
+
+function index_job_levels($conn, $job_id, $skill_levels)
+{
+    $total_skills = count(array_keys($skill_levels));
+    $pipeline = $conn->pipeline(['atomic' => true]);
+    foreach ($skill_levels as $skill => $level) {
+        $level = min($level, SKILL_LEVEL_LIMIT);
+        foreach (range($level, SKILL_LEVEL_LIMIT) as $wlevel) {
+            $pipeline->sadd(sprintf('idx:skill:%s:%s', $skill, $wlevel), $job_id);
+        }
+    }
+    $pipeline->zadd('idx:jobs:req', [$job_id => $total_skills]);
+    $pipeline->execute();
+}
+
+function search_job_levels($conn, $skill_levels)
+{
+    $skills = [];
+    foreach ($skill_levels as $skill => $level) {
+        $level = min($level, SKILL_LEVEL_LIMIT);
+        $skills[sprintf('skill:%s:%s', $skill, $level)] = 1;
+    }
+
+    $job_scores    = zunion($conn, $skills);
+    $final_results = zintersect($conn, [$job_scores => -1, 'jobs:req' => 1]);
+
+    return $conn->zrangebyscore('idx:' . $final_results, '-inf', 0);
+}
+
+function index_job_years($conn, $job_id, $skill_years)
+{
+    $total_skills = count(array_keys($skill_years));
+    $pipeline = $conn->pipeline(['atomic' => true]);
+
+    foreach ($skill_years as $skill => $years) {
+        $pipeline->zadd(
+            sprintf('idx:skill:%s:years', $skill), [$job_id => max($years, 0)]
+        );
+    }
+    $pipeline->sadd('idx:jobs:all', $job_id);
+    $pipeline->zadd('idx:jobs:req', [$job_id => $total_skills]);
+    $pipeline->execute();
+}
+
+function search_job_years($conn, $skill_years)
+{
+    $pipeline = $conn->pipeline(['atomic' => true]);
+
+    $union = [];
+    foreach ($skill_years as $skill => $years) {
+        $sub_result = zintersect(
+            $pipeline,
+            ['jobs:all' => -$years, sprintf('skill:%s:years', $skill) => 1],
+            30,
+            ['_execute' => false]
+        );
+        $pipeline->zremrangebyscore('idx:' . $sub_result, '(0', 'inf');
+        $union[] = zintersect(
+            $pipeline,
+            ['jobs:all' => 1, $sub_result => 0],
+            30,
+            ['_execute' => false]
+        );
+    }
+
+    $job_scores = zunion(
+        $pipeline,
+        array_fill_keys(array_values($union), 1),
+        30,
+        ['_execute' => false]
+    );
+    $final_result = zintersect(
+        $pipeline,
+        [$job_scores => -1, 'jobs:req' => 1],
+        30,
+        ['_execute' => false]
+    );
+
+    $pipeline->zrangebyscore('idx:' . $final_result, '-inf', 0);
+    $results = $pipeline->execute();
+
+    return end($results);
+}
