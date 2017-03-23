@@ -183,4 +183,40 @@ class Ch06Test extends TestCase
         $this->assertEquals(string_to_score('value'), $this->conn->zscore('key', 'test'));
         $this->assertEquals(string_to_score('other'), $this->conn->zscore('key', 'test2'));
     }
+
+    public function test_index_and_target_ads()
+    {
+        index_ad($this->conn, '1', ['USA', 'CA'], self::CONTENT, 'cpc', .25);
+        index_ad(
+            $this->conn, '2', ['USA', 'VA'], self::CONTENT . ' wooooo', 'cpc', .125
+        );
+
+        for ($i = 0; $i < 100; $i++) {
+            $ro = target_ad($this->conn, ['USA'], self::CONTENT);
+        }
+        $this->assertEquals('1', $ro[1]);
+
+        $r = target_ad($this->conn, ['VA'], 'wooooo');
+        $this->assertEquals('2', $r[1]);
+
+        $this->assertEquals(
+            ['2' => 0.125, '1' => 0.25],
+            $this->conn->zrange('idx:ad:value:', 0, -1, ['WITHSCORES' => true])
+        );
+        $this->assertEquals(
+            ['2' => 0.125, '1' => 0.25],
+            $this->conn->zrange('ad:base_value:', 0, -1, ['WITHSCORES' => true])
+        );
+
+        record_click($this->conn, $ro[0], $ro[1]);
+
+        $this->assertEquals(
+            ['2' => 0.125, '1' => 2.5],
+            $this->conn->zrange('idx:ad:value:', 0, -1, ['WITHSCORES' => true])
+        );
+        $this->assertEquals(
+            ['2' => 0.125, '1' => 0.25],
+            $this->conn->zrange('ad:base_value:', 0, -1, ['WITHSCORES' => true])
+        );
+    }
 }
