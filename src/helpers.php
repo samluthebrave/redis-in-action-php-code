@@ -48,6 +48,11 @@ class Threading extends \Thread
 
         call_user_func_array($this->function, $args);
     }
+
+    public function start($options = PTHREADS_INHERIT_ALL | PTHREADS_ALLOW_GLOBALS)
+    {
+        parent::start($options);
+    }
 }
 
 function bisect_right($sorted_array, $key)
