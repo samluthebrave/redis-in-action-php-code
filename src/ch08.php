@@ -254,9 +254,7 @@ function follow_user_list($conn, $other_uid, $list_id)
         $HOME_TIMELINE_SIZE - 1,
         ['WITHSCORES' => true]
     );
-    list($following, $followers, $status_and_score) = array_slice(
-        $pipeline->execute(), -2
-    );
+    list($following, $followers, $status_and_score) = $pipeline->execute();
     $pipeline->hincrby(
         sprintf('list:%s', $list_id), 'following', intval($following)
     );
@@ -288,9 +286,7 @@ function unfollow_user_list($conn, $other_uid, $list_id)
         0,
         $HOME_TIMELINE_SIZE - 1
     );
-    list($following, $followers, $statuses) = array_slice(
-        $pipeline->execute(), -2
-    );
+    list($following, $followers, $statuses) = $pipeline->execute();
     $pipeline->hincrby(
         sprintf('list:%s', $list_id), 'following', -intval($following)
     );
