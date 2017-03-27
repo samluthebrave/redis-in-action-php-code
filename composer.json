@@ -18,6 +18,7 @@
             "src/ch05_listing_source.php",
             "src/ch06.php",
             "src/ch07.php",
+            "src/ch08.php",
             "src/helpers.php"
         ]
     },
