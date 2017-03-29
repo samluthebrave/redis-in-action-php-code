@@ -140,7 +140,9 @@ function get_expected($conn, $key, $today)
     return $EXPECTED[$key];
 }
 
-const COUNTRIES = [
+global $COUNTRIES, $STATES;
+
+$COUNTRIES = [
     'ABW', 'AFG', 'AGO', 'AIA', 'ALA', 'ALB', 'AND', 'ARE', 'ARG', 'ARM', 'ASM',
     'ATA', 'ATF', 'ATG', 'AUS', 'AUT', 'AZE', 'BDI', 'BEL', 'BEN', 'BES', 'BFA',
     'BGD', 'BGR', 'BHR', 'BHS', 'BIH', 'BLM', 'BLR', 'BLZ', 'BMU', 'BOL', 'BRA',
@@ -166,7 +168,7 @@ const COUNTRIES = [
     'VUT', 'WLF', 'WSM', 'YEM', 'ZAF', 'ZMB', 'ZWE'
 ];
 
-const STATES = [
+$STATES = [
     'CAN' => [
         'AB', 'BC', 'MB', 'NB', 'NL', 'NS', 'NT', 'NU', 'ON', 'PE', 'QC', 'SK',
         'YT',
@@ -183,15 +185,17 @@ const STATES = [
 
 function get_code($country, $state)
 {
-    $cindex = bisect_left(COUNTRIES, $country);
-    if ($cindex > count(COUNTRIES) OR COUNTRIES[$cindex] != $country) {
+    global $COUNTRIES, $STATES;
+
+    $cindex = bisect_left($COUNTRIES, $country);
+    if ($cindex > count($COUNTRIES) OR $COUNTRIES[$cindex] != $country) {
         $cindex = -1;
     }
     $cindex += 1;
 
     $sindex = -1;
-    if ($state AND array_key_exists($country, STATES)) {
-        $states = STATES[$country];
+    if ($state AND array_key_exists($country, $STATES)) {
+        $states = $STATES[$country];
         $sindex = bisect_left($states, $state);
         if ($sindex > count($states) OR $states[$sindex] != $state) {
             $sindex = -1;
@@ -250,6 +254,8 @@ function aggregate_location($conn)
 
 function update_aggregates(&$countries, &$states, $codes)
 {
+    global $COUNTRIES, $STATES;
+
     foreach ($codes as $code) {
         if (strlen($code) != 2) {
             continue;
@@ -258,25 +264,25 @@ function update_aggregates(&$countries, &$states, $codes)
         $country = ord($code[0]) - 1;
         $state   = ord($code[1]) - 1;
 
-        if ($country < 0 OR $country >= count(COUNTRIES)) {
+        if ($country < 0 OR $country >= count($COUNTRIES)) {
             continue;
         }
 
-        $country = COUNTRIES[$country];
+        $country = $COUNTRIES[$country];
         if (!isset($countries[$country])) {
             $countries[$country] = 0;
         }
         $countries[$country] += 1;
 
-        if (!array_key_exists($country, STATES)) {
+        if (!array_key_exists($country, $STATES)) {
             continue;
         }
 
-        if ($state < 0 OR $state >= count(STATES[$country])) {
+        if ($state < 0 OR $state >= count($STATES[$country])) {
             continue;
         }
 
-        $state = STATES[$country][$state];
+        $state = $STATES[$country][$state];
         if (!isset($states[$country][$state])) {
             $states[$country][$state] = 0;
         }

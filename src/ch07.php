@@ -4,7 +4,9 @@ namespace RedisInAction\Ch07;
 
 use Ramsey\Uuid\Uuid;
 
-const STOP_WORDS = [
+global $STOP_WORDS;
+
+$STOP_WORDS = [
     'able','about','across','after','all','almost','also','am','among','an',
     'and','any','are','as','at','be','because','been','but','by','can',
     'cannot','could','dear','did','do','does','either','else','ever','every',
@@ -22,6 +24,8 @@ const WORDS_RE = "[a-z']{2,}";
 
 function tokenize($content)
 {
+    global $STOP_WORDS;
+
     $words = [];
     preg_match_all('/' . WORDS_RE . '/i', strtolower($content), $matches);
     foreach ($matches[0] as $match) {
@@ -30,7 +34,8 @@ function tokenize($content)
             $words[] = $word;
         }
     }
-    return array_diff($words, STOP_WORDS);
+
+    return array_diff($words, $STOP_WORDS);
 }
 
 function index_document($conn, $docid, $content)
@@ -81,6 +86,8 @@ const QUERY_RE = "[+-]?[a-z']{2,}";
 
 function parse($query)
 {
+    global $STOP_WORDS;
+
     $unwanted = [];
     $all      = [];
     $current  = [];
@@ -95,7 +102,7 @@ function parse($query)
             $prefix = null;
         }
         $word = trim($word, "'");
-        if (strlen($word) < 2 OR in_array($word, STOP_WORDS)) {
+        if (strlen($word) < 2 OR in_array($word, $STOP_WORDS)) {
             continue;
         }
 

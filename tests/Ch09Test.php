@@ -105,10 +105,12 @@ class Ch09Test extends TestCase
 
     public function test_user_location()
     {
+        global $COUNTRIES, $STATES;
+
         $i = 0;
-        foreach (COUNTRIES as $country) {
-            if (array_key_exists($country, STATES)) {
-                foreach (STATES[$country] as $state) {
+        foreach ($COUNTRIES as $country) {
+            if (array_key_exists($country, $STATES)) {
+                foreach ($STATES[$country] as $state) {
                     set_location($this->conn, $i, $country, $state);
                     $i += 1;
                 }
@@ -127,9 +129,9 @@ class Ch09Test extends TestCase
         $this->assertEquals($_states, $states);
 
         foreach (array_keys($countries) as $c) {
-            if (array_key_exists($c, STATES)) {
-                $this->assertEquals(count(STATES[$c]), $countries[$c]);
-                foreach (STATES[$c] as $s) {
+            if (array_key_exists($c, $STATES)) {
+                $this->assertEquals(count($STATES[$c]), $countries[$c]);
+                foreach ($STATES[$c] as $s) {
                     $this->assertEquals(1, $states[$c][$s]);
                 }
             } else {
