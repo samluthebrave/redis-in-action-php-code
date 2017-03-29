@@ -4,7 +4,7 @@ namespace RedisInAction\Ch07;
 
 use RedisInAction\Test\TestCase;
 
-class Ch06Test extends TestCase
+class Ch07Test extends TestCase
 {
     const CONTENT = 'this is some random content, look at how it is indexed.';
 
