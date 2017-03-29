@@ -2,6 +2,8 @@
 
 namespace RedisInAction\Helper;
 
+use \InvalidArgumentException;
+
 class Threading extends \Thread
 {
     private $globals = [];
@@ -55,26 +57,23 @@ class Threading extends \Thread
     }
 }
 
-function bisect_right($sorted_array, $key)
+function bisect_right($sorted_haystack, $needle, $left = 0, $right = null)
 {
-    end($sorted_array);
-    $right = key($sorted_array);
-
-    reset($sorted_array);
-    $left = key($sorted_array);
-
-    if ($key < $sorted_array[$left]) {
-        return 0;
-    } elseif ($key >= $sorted_array[$right]) {
-        return count($sorted_array);
+    if ($left < 0) {
+        throw new InvalidArgumentException('right must be non-negative');
     }
 
-    while ($right - $left > 1) {
-        $middle = intval(($left + $right) / 2);
-        if ($key >= $sorted_array[$middle]) {
-            $left = $middle;
-        } else {
+    if (is_null($right)) {
+        $right = count($sorted_haystack);
+    }
+
+    while ($left < $right) {
+        $middle = ($left + $right) >> 1;
+
+        if ($needle < $sorted_haystack[$middle]) {
             $right = $middle;
+        } else {
+            $left = $middle + 1;
         }
     }
 
