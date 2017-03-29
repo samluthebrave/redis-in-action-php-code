@@ -79,3 +79,26 @@ function bisect_right($sorted_haystack, $needle, $left = 0, $right = null)
 
     return $right;
 }
+
+function bisect_left($sorted_haystack, $needle, $left = 0, $right = null)
+{
+    if ($left < 0) {
+        throw new InvalidArgumentException('right must be non-negative');
+    }
+
+    if (is_null($right)) {
+        $right = count($sorted_haystack);
+    }
+
+    while ($left < $right) {
+        $middle = ($left + $right) >> 1;
+
+        if ($needle < $sorted_haystack[$middle]) {
+            $right = $middle + 1;
+        } else {
+            $left = $middle;
+        }
+    }
+
+    return $right;
+}
