@@ -77,7 +77,7 @@ function bisect_right($sorted_haystack, $needle, $left = 0, $right = null)
         }
     }
 
-    return $right;
+    return $left;
 }
 
 function bisect_left($sorted_haystack, $needle, $left = 0, $right = null)
@@ -93,12 +93,12 @@ function bisect_left($sorted_haystack, $needle, $left = 0, $right = null)
     while ($left < $right) {
         $middle = ($left + $right) >> 1;
 
-        if ($needle < $sorted_haystack[$middle]) {
-            $right = $middle + 1;
+        if ($needle > $sorted_haystack[$middle]) {
+            $left = $middle + 1;
         } else {
-            $left = $middle;
+            $right = $middle;
         }
     }
 
-    return $right;
+    return $left;
 }
