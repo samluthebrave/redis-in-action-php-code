@@ -42,7 +42,7 @@ function process_logs($conn, $path, $callback)
         while (!feof($inp)) {
             $line = fgets($inp);
             $callback($pipe, $line);
-            $offset += intval($offset) + strlen($line);
+            $offset = intval($offset) + strlen($line);
 
             $lno++;
             if (!($lno % 1000)) {
