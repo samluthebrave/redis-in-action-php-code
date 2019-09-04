@@ -1,3 +1,4 @@
 vendor
 composer.lock
 GeoLiteCity-*.csv
+.idea
